@@ -64,3 +64,15 @@
   continues seamlessly into the block, the chip uses the tabs-mod spec,
   and the icon is `icons/opencode.svg` tinted by severity. Label keeps the
   severity color and `Go <pct>%` text (user approved it).
+  User then asked the chip to sit *beside Changes* (before the window
+  controls) — impossible while those are drawn inside the shipped `tabs`
+  mod. Solution per the guide: `mod.clone {"name":"tabs","as":"my-tabs"}`;
+  layout's `tabs` block now points at the clone and the separate
+  `oc-limits` block (and mod) were removed. `my-tabs` = tabs clone +
+  limits fetch (60 s) + `limitsChip(t)` inserted between the Changes
+  panel-button and the window-control buttons, + self-opening details
+  dialog (`openOverlay({mod: "my-tabs", props: {detail: true}, kind:
+  "popup", at: "pointer", width: 320})`; guarded `(props() ?? {}).detail`
+  the same way). `oc-limits` deleted from home and repo; its logic lives
+  in `mods/my-tabs/main.js`. Note: `layout.clone`'s sibling `mod.clone`
+  rewrote the clone's own asset paths automatically.
