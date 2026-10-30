@@ -30,7 +30,9 @@ match; the one in the herdr-app home always wins.
 Current state of the home: our layout `my-herd` (cloned from `main`; root
 `terminal_opacity: 0.8` with a `#1b2434→#0d1120` gradient behind root and
 version-tab panes) is shown; keys.json carries tmux-style bindings
-(alt-shift-h/l tab switching, alt-g lazygit — see CHANGELOG); shipped layouts (`main`, `terminals`,
+(alt-shift-h/l tab switching, alt-g lazygit); our mod `oc-limits` shows
+OpenCode limits as a top-bar button with at-pointer popover (go/zen/free
+windows); shipped layouts (`main`, `terminals`,
 `win98`) and shipped mods (`spaces`, `agents`, `tabs`, `menu`, `prompt`,
 `confirm`, `help`, `toast`, `pane`, `peek`, `picker`, `new-menu`, `files`,
 `changes`, `workspace-chrome`, `workspace-status`, `worktree`,

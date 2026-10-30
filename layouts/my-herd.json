@@ -76,15 +76,34 @@
       "type": "column",
       "children": [
         {
-          "id": "tabs",
-          "type": "block",
-          "content": {
-            "mod": "tabs"
-          },
+          "id": "tabs-row",
+          "type": "row",
           "size": {
             "px": 42
           },
-          "window_drag": true
+          "window_drag": true,
+          "children": [
+            {
+              "id": "tabs",
+              "type": "block",
+              "content": {
+                "mod": "tabs"
+              },
+              "size": {
+                "weight": 1
+              }
+            },
+            {
+              "id": "oc-limits",
+              "type": "block",
+              "content": {
+                "mod": "oc-limits"
+              },
+              "size": {
+                "px": 128
+              }
+            }
+          ]
         },
         {
           "id": "work-body",

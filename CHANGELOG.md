@@ -36,3 +36,23 @@
     is the analog), `send-prefix`, tmux-resurrect (terminals survive
     restarts in Herdr natively). Verified `keys.error` absent, and tested
     the `terminal.open` argv JSON end-to-end (t3 opened, killed).
+- **OpenCode limits mod (`mods/oc-limits/`).** Top-bar button (128 px block
+  right of the tab bar, added to `my-herd.json` as a `tabs-row` wrapper
+  holding `tabs` at weight 1 + the block at px 128 — tabs keep full width so
+  window controls stay flush right; the row keeps `px: 42` height).
+  Data: `opencode api experimental.usage.limits` (discovered via the
+  OpenAPI spec; `/limits`, `/provider` are SPA 404s). The CLI wraps the
+  payload in `{location, data}` — use `.data`. Executable note: `opencode`
+  is an npm `.cmd`/`.ps1` shim on Windows, so spawn
+  `cmd.exe /c opencode …`. Renders every plan key present (`free`, `go`,
+  `zen`) with `rolling`/`weekly`/`monthly` percent bars, `limited` flag,
+  `resetsAt` as relative time; worst clock shown on the button; green
+  (<50), working (50–79), blocked (≥80 or limited) from theme colors.
+  Button opens a popover: `openOverlay({kind: "popup", at: "pointer",
+  width: 320})` — Esc/click-beside closes (user asked for popover, not a
+  centered dialog; `at: "pointer"` comes from `herdr.d.ts`). First check
+  failed: `props()` is null at `herdr-app check` time — guard with
+  `(props() ?? {}).detail`. First layout attempt lost the row's
+  `size: {px: 42}`, ballooning the tab bar — restored it. Activity-console
+  link opens `workspace.usageURL` via
+  `rundll32 url.dll,FileProtocolHandler`. Poll every 60 s (data only).
