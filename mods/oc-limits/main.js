@@ -1,4 +1,4 @@
-import { View, div } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { exec, theme, openOverlay, closeOverlay, props } from "herdr";
 
@@ -91,17 +91,28 @@ export default class OcLimits extends View {
       : this.err
         ? "limits ?"
         : "limits …";
+    /* Chip styled exactly like tabs mod's Files/Changes panel buttons
+       (h 26, px 8, gap 5, rounded 6, chrome bg, tinted 14px svg icon);
+       the strip paints chrome + border_b so the bar continues seamlessly. */
     return h_flex()
       .id("oc-limits-bar")
       .size_full()
       .items_center()
-      .justify_center()
+      .justify_end()
+      .pr(6)
+      .bg(t.chrome)
+      .border_b(1)
+      .border_color(t.border)
       .child(
         h_flex()
           .id("oc-limits-btn")
-          .p(6)
-          .gap(7)
+          .h(26)
+          .px(8)
+          .gap(5)
+          .items_center()
           .rounded(6)
+          .text_size(12)
+          .bg(t.chrome)
           .hover((s) => s.bg(t.hover))
           .on_click(() =>
             openOverlay({
@@ -112,17 +123,8 @@ export default class OcLimits extends View {
               width: 320,
             })
           )
-          .child(div().text_size(12).font_semibold().text_color(c).child(label))
-          .child(
-            h_flex()
-              .w(34)
-              .h(4)
-              .rounded(2)
-              .bg(t.hover)
-              .child(
-                div().h(4).w(Math.round((worst ? worst.percent : 0) * 0.34)).rounded(2).bg(c)
-              )
-          )
+          .child(svg("icons/opencode.svg").size(14).text_color(c))
+          .child(div().text_size(12).text_color(c).child(label))
       );
   }
 
