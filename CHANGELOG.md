@@ -56,3 +56,11 @@
   `size: {px: 42}`, ballooning the tab bar — restored it. Activity-console
   link opens `workspace.usageURL` via
   `rundll32 url.dll,FileProtocolHandler`. Poll every 60 s (data only).
+- **Chip restyle (2026-10-30, follow-up):** user asked the button to look
+  like the shipped `Files`/`Changes` buttons. Read `mods/tabs/main.js`
+  `panelButton` — `h(26).px(8).gap(5).rounded(6)`, `bg(t.chrome)` (blends
+  into the bar until `bg(t.hover)`), 14 px tinted svg icon — and mirrored
+  it: the strip now paints `chrome` + `border_b(1, border)` so the tab bar
+  continues seamlessly into the block, the chip uses the tabs-mod spec,
+  and the icon is `icons/opencode.svg` tinted by severity. Label keeps the
+  severity color and `Go <pct>%` text (user approved it).
