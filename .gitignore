@@ -2,3 +2,8 @@
 herdr-shot.png
 opacity-check.png
 herdr-shot-*.png
+
+# app-generated files inside mod folders (rewritten by Herdr, never ours)
+mods/*/gpui-kit.d.ts
+mods/*/herdr.d.ts
+mods/*/jsconfig.json
