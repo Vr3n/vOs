@@ -140,8 +140,9 @@ export default class Agents extends View {
             if (ids.length) addrSession[a.address] = ids;
           } catch { /* keep polling next round */ }
         }
-        // Dead terminals drop out by themselves; only redraw on real change.
-        const sig = JSON.stringify([addrSession, [...byParent].map(([k, v]) => [k, v.map((s) => s.id)])]);
+        // Dead terminals drop out by themselves; only redraw on real change —
+        // including outcome/title changes so running/done icons stay live.
+        const sig = JSON.stringify([addrSession, [...byParent].map(([k, v]) => [k, v.map((s) => [s.id, s.outcome ?? null, s.title ?? ""])])]);
         if (sig !== this.ocSig) {
           this.addrSession = addrSession;
           this.ocByParent = byParent;
@@ -156,10 +157,12 @@ export default class Agents extends View {
   }
 
   // Depth-first OpenCode child sessions for an agent address, with tree lines.
+  // Finished sessions (outcome set) are hidden: the sidebar shows only live
+  // subagents, so idle rows never pile up under a running parent.
   ocKids(addr, lead = []) {
     const sessIds = this.addrSession[addr] ?? [];
     const out = [];
-    const kidsOf = (pid) => this.ocByParent.get(pid) ?? [];
+    const kidsOf = (pid) => (this.ocByParent.get(pid) ?? []).filter((s) => !s.outcome);
     const walk = (pid, prefix) => {
       const kids = kidsOf(pid);
       kids.forEach((sess, i) => {

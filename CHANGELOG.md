@@ -1,5 +1,25 @@
 # my-herd customizations
 
+## 2026-10-30 (oc live-only)
+
+- **Sidebar shows only live subagents (`mods/my-agents/`).** Finished
+  OpenCode child sessions used to linger as idle rows under a running
+  parent. `ocKids` now filters to sessions without an `outcome`, so only
+  running subagents appear (fold counts and urgency follow automatically;
+  hc child terminals were already live-only). Shot confirms: the fm-analyzer
+  agent lists exactly its 4 running round-3 subagents, finished ones gone.
+
+## 2026-10-30 (oc live icons)
+
+- **Subagent running/done icons were frozen (`mods/my-agents/`).** The
+  refresh-skipping signature only hashed session *ids*, so when a subagent
+  started or finished (outcome set, no new sessions) the fresh `session.list`
+  data was discarded and icons never updated. The signature now covers
+  `[id, outcome, title]` per child, so status transitions redraw within a
+  poll tick. Verified live: spawned a recon subagent, its row appeared with
+  the working spinner while `outcome` was null and the finished sibling
+  shows the idle dot. `check` passes, `status` clean.
+
 ## 2026-10-30 (oc chat tail fixed)
 
 - **Detail pane now opens on the latest message (`mods/my-agents/`).**
