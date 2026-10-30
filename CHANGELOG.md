@@ -1,5 +1,77 @@
 # my-herd customizations
 
+## 2026-10-30 (oc chat tail fixed)
+
+- **Detail pane now opens on the latest message (`mods/my-agents/`).**
+  Turn-merging + tool output previews (below) made the tail taller than the
+  viewport, exposing that `scroll_to_bottom()` in the fetch callback never
+  pinned (call landed before the list mounted). Fix: the render branch calls
+  `scroll_to_bottom()` on every render while `ocFollow` is true, so the pane
+  is bottom-pinned from first paint and tracks live output; the body wheel
+  handler clears `ocFollow` (with a `↓ latest` header chip to jump back).
+  Text rendering hardened too: `TextView.markdown` is wrapped in try/catch
+  with a plain-text fallback, so odd transcript bytes can't silently drop
+  the tail item. Shot proves it: fresh pane opens on the final "Done…"
+  message with Deliverables/action-items markdown; the pre-fix pane beside
+  it correctly shows the `↓ latest` chip instead.
+- **Chat look, agent-style.** Consecutive assistant messages merge into one
+  turn (single dot + name + time header, prose and tool cards in order);
+  user prompts are right-weighted `raised` rounded-10 bubbles with a
+  right-aligned `you · time` caption; every tool card now shows a 300-char
+  output preview under its header row, so you can see what the subagent
+  actually did without opening anything else.
+- Also synced the earlier sidebar poll-lease fix (30 s timestamp leases on
+  `ocRefreshing`/`ocFetching` instead of stuck booleans) into the repo.
+
+## 2026-10-30 (oc chat tail)
+
+- **Chat-style transcript with follow-tail (`mods/my-agents/`).** The detail
+  pane's message list is now GPUI's measured `list()` (variable heights OK)
+  with a `VirtualListScrollHandle` + `track_scroll` and a paired
+  `Scrollbar.vertical`, instead of a plain scroll flex. After each successful
+  export the pane keys the tail (last id + count + content size) and calls
+  `scroll_to_bottom()` only when the tail moved — first load lands on the
+  latest message, live sessions track new output, and manual refreshes with
+  no change keep your scroll position. Messages render chat-like: user
+  prompts are right-weighted bubbles (gutter + `raised` rounded-10 block,
+  right-aligned `you · time` caption), agent turns are full-width with an
+  accent dot + semibold name + dim time, tool calls sit in an inset `raised`
+  rounded-8 group. Renderer creates no handlers/state (forbidden inside
+  `list()` renderers), empty messages return an empty div. `list`/`Scrollbar`
+  come from `gpui-kit`, the scroll handle from `gpui-base`.
+- **Poll leases, not latches.** `ocFetching` had the same stuck-flag hazard
+  as the sidebar guard: a hung `exec`/`hc` (no timeout option) would freeze
+  the pane's polling forever. Both guards are now 30 s timestamp leases —
+  a stale run's slot is taken over and only the lease owner clears it.
+- Verified: `check` passes, `status` `errors: []`, shot of a live pane shows
+  bottom-pinned chat transcript (dot + name + time headers, inset tool
+  groups). Test pane closed; `main.js` synced home==repo.
+
+## 2026-10-30 (oc detail restyle + smart poll)
+
+- **Restyled the `ocDetail` transcript pane (`mods/my-agents/`).** Header is
+  now a native panel header (`chrome` bg, `border_b`): status glyph +
+  semibold truncated title + dim second line (agent · model · N messages ·
+  live/ago), refresh as a `my-tabs` panelButton-style chip (`h 26, px 8,
+  gap 5, rounded 6, chrome→hover`), not a bare accent link. User prompts sit
+  in a raised rounded block, agent text flows plainly with muted names and
+  dim timestamps; tool calls are compact `h 22` rows (status-tinted glyph,
+  muted name, truncated input summary, right-aligned status word) with
+  consecutive calls grouped at tight gaps; `reasoning` parts are skipped;
+  summaries prefer url/path/command keys over format flags. Caps unchanged
+  (last 30 messages, ~3000-char parts). Ids stable (`ocdetail`,
+  `ocdetail-head`, `ocdetail-msgs`, `ocmsgwrap-…`, `octool-…`).
+- **Smarter detail polling.** The 3 s tick now runs cheap `opencode api
+  session.get --param sessionID=<id>` and compares `time.updated`; the full
+  `session export` runs only on first load, on change, or on manual refresh
+  (still via `cmd.exe /c`, npm-shim workaround). A tick is skipped while a
+  fetch is in flight; failures keep the last good transcript with a dim
+  note. Sidebar `session.list` poll kept at 8 s with a run-dedupe guard.
+- Verified: `herdr-app check` passes, `status` `errors: []`, shot of a live
+  pane on a finished 22-message session shows the native header, raised
+  prompt block, URL-bearing tool rows, no `[reasoning]` noise; test pane
+  closed afterwards. Home layout file unchanged.
+
 ## 2026-10-30 (opencode subagents)
 
 - **OpenCode subagents in the sidebar (`mods/my-agents/`).** Cloned the
@@ -15,6 +87,31 @@
   `my-agents`. Verified: `herdr-app check` passes, `herdr-app status`
   `errors: []`, `herdr-app shot` shows session-title rows (e.g. FM26
   decode/chart tasks) under their parents. Shipped `agents` untouched.
+- **Per-agent subagent mapping (fix).** The sidebar mixed every session's
+  subagents under every agent: `hc get` records accumulate *all* sessions a
+  terminal ever hosted (e.g. t2/t7 both listed two sessions), and the mod
+  used every id. Now `refreshOC` resolves each terminal to its *current*
+  session only — exact match of the live terminal title (`OC | <session
+  title>`) against record titles, falling back to most-recently-updated,
+  re-resolved each tick so session switches follow, dead terminals pruned,
+  and redraws only on real change (signature compare; failures keep last
+  good state instead of wiping the tree). Shot confirms: the my-herd agent
+  shows only the restyle subagent, the fm-analyzer agent only its three
+  chart subagents. (Also survived a transient "window did not answer"
+  during hot reload — recovered on its own, `errors: []`.)
+- **Click a subagent row → transcript pane.** The row click now runs
+  `pane.split {direction: right, mod: my-agents, props: {ocDetail}}` so the
+  subagent's work opens as a real tab pane beside the agent (per request,
+  not a popup). The detail copy fetches `opencode session export <id>`
+  (message list API isn't exposed as an `opencode api` operation; export
+  has the full transcript: user/assistant `text` + `content` tool parts),
+  repolls every 4 s, and renders the last 30 non-empty messages as
+  markdown with tool-call rows (`✓/✗/◌` + name + input summary) under a
+  header (title, agent · model · message count, refresh link). `TextView`
+  comes from `gpui-base`, not `gpui-kit` (check caught this). Verified
+  end-to-end: opened a pane on a finished chart-test session, shot shows
+  prompt markdown + assistant reply + `read` tool rows, then closed the
+  pane; `check` passes, `status` clean.
 - **Removed the stale `herdr` TUI-multiplexer skill.** Deleted
   `~/.agents/skills/herdr` (installed from `herdrdev/herdr`,
   "terminal multiplexer ... Requires HERDR_ENV=1") and its

@@ -1,8 +1,8 @@
 // Agents in grouped or priority views; parents take their most urgent sub-agent's place.
 // A viewed done agent stays in Done until left.
 
-import { View, div, image, svg } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
+import { View, div, image, svg, list } from "gpui-kit";
+import { v_flex, h_flex, TextView, Scrollbar, VirtualListScrollHandle } from "gpui-base";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, hc } from "herdr";
 
 function find(node, id) {
@@ -71,6 +71,19 @@ function icon(p, size, color) {
 export default class Agents extends View {
   init(_props, cx) {
     if (props()?.sortMenu) return;
+    if (props()?.ocDetail) {
+      // Detail pane copy: transcript of one OpenCode subagent session.
+      this.ocDetailId = props().ocDetail;
+      this.ocDetail = null;
+      this.ocDetailError = null;
+      this.ocDetailUpdated = null;
+      this.ocFetching = 0;
+      this.ocScroll = VirtualListScrollHandle.new();
+      this.ocFollow = true;
+      cx.timer.every(3000, (cx) => this.refreshDetail(cx));
+      this.refreshDetail(cx, true);
+      return;
+    }
     this.folded = new Set();
     // Each agent's last state and when it changed (ms), kept across restarts.
     this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}");
@@ -80,28 +93,29 @@ export default class Agents extends View {
     // shown as tree rows under the main agent. Data-only polling.
     this.addrSession = {};
     this.ocByParent = new Map();
+    this.ocSig = null;
     cx.timer.every(8000, (cx) => this.refreshOC(cx));
     this.refreshOC(cx);
   }
 
-  // Maps agent terminal address -> opencode session id (via hc get records),
-  // then lists all sessions and groups children by parentID.
+  // Maps agent terminal address -> its CURRENT opencode session id (via hc get
+  // records), then lists all sessions and groups children by parentID.
+  // A terminal's records accumulate every session it ever hosted, so with
+  // several candidates pick the one matching the terminal's live title
+  // ("OC | <session title>"); else the most recently updated (current
+  // sessions go idle when you leave them, so recency ~= current).
   refreshOC(cx) {
+    // Lease, not a latch: exec/hc have no timeout, so a hung fetch must not
+    // freeze polling forever. A run older than 30s is presumed dead and its
+    // slot is taken over; a late straggler only clears its own lease.
+    const now = Date.now();
+    if (this.ocRefreshing && now - this.ocRefreshing < 30000) return;
+    this.ocRefreshing = now;
     cx.spawn(async (cx) => {
       try {
-        for (const a of agents()) {
-          if (this.addrSession[a.address]) continue;
-          try {
-            const g = await hc(["get", a.address]);
-            const raw = String(g.stdout ?? "").trim();
-            const o = raw ? JSON.parse(raw) : null;
-            const recs = o?.records ?? o?.data?.records ?? null;
-            const ids = recs ? Object.keys(recs) : [];
-            if (ids.length) this.addrSession[a.address] = ids;
-          } catch { /* keep polling next round */ }
-        }
         const r = await exec("cmd.exe", ["/c", "opencode", "api", "session.list"]);
         const data = JSON.parse(String(r.stdout).trim()).data ?? [];
+        const byId = new Map(data.map((s) => [s.id, s]));
         const byParent = new Map();
         for (const s of data) {
           if (!s?.parentID) continue;
@@ -109,11 +123,35 @@ export default class Agents extends View {
           byParent.get(s.parentID).push(s);
         }
         for (const kids of byParent.values()) kids.sort((x, y) => (x.time?.created ?? 0) - (y.time?.created ?? 0));
-        this.ocByParent = byParent;
+        const addrSession = {};
+        for (const a of agents()) {
+          try {
+            const g = await hc(["get", a.address]);
+            const raw = String(g.stdout ?? "").trim();
+            const o = raw ? JSON.parse(raw) : null;
+            const recs = o?.records ?? o?.data?.records ?? null;
+            let ids = recs ? Object.keys(recs) : [];
+            if (ids.length > 1) {
+              const termTitle = String(o?.title ?? "").replace(/^OC\s*\|\s*/, "");
+              const hit = termTitle ? ids.filter((id) => recs[id]?.title === termTitle) : [];
+              if (hit.length) ids = hit;
+              else ids = [...ids].sort((x, y) => ((byId.get(y)?.time?.updated ?? 0) - (byId.get(x)?.time?.updated ?? 0))).slice(0, 1);
+            }
+            if (ids.length) addrSession[a.address] = ids;
+          } catch { /* keep polling next round */ }
+        }
+        // Dead terminals drop out by themselves; only redraw on real change.
+        const sig = JSON.stringify([addrSession, [...byParent].map(([k, v]) => [k, v.map((s) => s.id)])]);
+        if (sig !== this.ocSig) {
+          this.addrSession = addrSession;
+          this.ocByParent = byParent;
+          this.ocSig = sig;
+          cx.notify();
+        }
       } catch {
-        this.ocByParent = new Map();
+        /* keep last good state */
       }
-      cx.notify();
+      if (this.ocRefreshing === now) this.ocRefreshing = 0;
     });
   }
 
@@ -160,13 +198,178 @@ export default class Agents extends View {
       .text_size(12.5)
       .hover((s) => s.bg(t.hover))
       .tooltip(`${sess.agent ?? "subagent"} · ${sess.id}`)
-      .on_click(() => run("pane.focus", { pane: agents().find((a) => a.address === parentAddr)?.pane }))
+      .on_click(() => run("pane.split", { direction: "right", mod: "my-agents", props: { ocDetail: sess.id } }))
       .children(o.lines.map(l => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
       .child(div().mr(8).text_size(12.5).text_color(t.muted).child("◈"))
       .child(div().flex_1().truncate().text_color(t.muted).child(label))
       .child(this.status(t, { status: st }, compact));
+  }
+
+  // Detail pane: cheap change check (`session.get` vs `time.updated`) on a 3 s
+  // tick; the full `session export` runs only on first load, when `updated`
+  // moved, or on manual refresh. Never two fetches at once; failures keep the
+  // last good transcript and note it dimly until the next tick.
+  refreshDetail(cx, force = false) {
+    // Lease, not a latch (see refreshOC): a hung exec must not freeze the pane.
+    const now = Date.now();
+    if (this.ocFetching && now - this.ocFetching < 30000) return;
+    this.ocFetching = now;
+    cx.spawn(async (cx) => {
+      try {
+        let updated = null;
+        try {
+          const g = await exec("cmd.exe", ["/c", "opencode", "api", "session.get", "--param", `sessionID=${this.ocDetailId}`]);
+          updated = JSON.parse(String(g.stdout).trim()).data?.time?.updated ?? null;
+        } catch { /* fall through to a full fetch */ }
+        const stale = updated === null && !this.ocDetail;
+        if (force || stale || updated === null || updated !== this.ocDetailUpdated) {
+          try {
+            const r = await exec("cmd.exe", ["/c", "opencode", "session", "export", this.ocDetailId]);
+            this.ocDetail = JSON.parse(String(r.stdout).trim());
+            this.ocDetailUpdated = this.ocDetail?.info?.time?.updated ?? updated;
+            this.ocDetailError = null;
+          } catch (e) {
+            if (!this.ocDetail) this.ocDetailError = String(e?.message ?? e).slice(0, 200);
+            else this.ocDetailNote = "refresh failed — showing last good transcript";
+          }
+        } else {
+          this.ocDetailNote = null;
+        }
+      } catch (e) {
+        if (!this.ocDetail) this.ocDetailError = String(e?.message ?? e).slice(0, 200);
+      }
+      if (this.ocFetching === now) this.ocFetching = 0;
+      cx.notify();
+    });
+  }
+
+  // One transcript message, chat-style. User prompts are bubbles pushed right
+  // behind a gutter; agent turns flow full width with a name header and tool
+  // calls grouped in an inset block. No handlers in here: this runs inside
+  // list()'s renderer, where clicks and retained state are refused.
+  ocMessage(t, msgs, index) {
+    const m = msgs[index];
+    const when = m.time?.completed ?? m.time?.created;
+    const clock = when ? new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+    const mine = m.type === "user";
+    const trunc = (s, n) => (s.length > n ? s.slice(0, n) + "…" : s);
+    const kids = [];
+    const pushText = (key, text) => {
+      // TextView.markdown can choke on odd transcript bytes; fall back to
+      // plain text rather than dropping the message (a failed item would
+      // silently move the visible tail).
+      try {
+        kids.push(TextView.markdown(key, trunc(text, 3000)));
+      } catch {
+        kids.push(div().text_size(12.5).text_color(t.foreground).child(trunc(text, 3000)));
+      }
+    };
+    // Prefer the most informative string for the summary: a command, path or
+    // URL beats a format flag or id.
+    const toolSummary = (p) => {
+      const input = p.state?.input ?? p.input ?? {};
+      const pick = ["command", "cmd", "url", "path", "file", "filepath", "query", "pattern", "text", "prompt", "question", "id"]
+        .map((k) => input[k]).find((v) => typeof v === "string" && v.trim());
+      const first = pick ?? Object.values(input).find((v) => typeof v === "string") ?? "";
+      return trunc(String(first).split("\n")[0], 140) || (p.name ?? "tool");
+    };
+    const toolOutput = (p) => trunc((p.state?.content ?? []).map((c) => c.text ?? "").join("\n").trim(), 300);
+    const toolCard = (p, n) => {
+      const summary = toolSummary(p);
+      const st = p.state?.status;
+      const glyph = st === "completed" ? "✓" : st === "failed" ? "✗" : "◌";
+      const color = st === "completed" ? t.dim : st === "failed" ? t.blocked : t.working;
+      const out = toolOutput(p);
+      return v_flex().id(`octool-${m.id}-${n}`).flex_none()
+        .child(h_flex().h(22).gap(7).items_center().px(8)
+          .child(div().w(14).flex_none().text_size(11.5).text_color(color).child(glyph))
+          .child(div().flex_none().text_size(12).font_medium().text_color(t.muted).child(p.name ?? "tool"))
+          .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(summary))
+          .child(div().flex_none().text_size(11).text_color(t.dim).child(st ?? "")))
+        .when(Boolean(out), (el) => el.child(div().pl(29).pr(8).pb(4).text_size(11.5).text_color(t.dim).child(out)));
+    };
+    let group = [];
+    let cardN = 0;
+    const flush = (inset) => {
+      if (group.length) kids.push(v_flex().id(`octoolgroup-${m.id}-${kids.length}`).gap(2)
+        .when(inset, (el) => el.rounded(8).bg(t.raised).px(4).py(4))
+        .children(group));
+      group = [];
+    };
+    if (m.text) pushText(`ocmsg-${m.id}`, m.text);
+    for (const p of m.content ?? []) {
+      if (p.type === "text" && p.text) { flush(true); pushText(`ocpart-${m.id}-${p.text.length}`, p.text); }
+      else if (p.type === "tool") group.push(toolCard(p, cardN++));
+      else if (p.type && p.type !== "reasoning") { flush(true); kids.push(div().text_size(12).text_color(t.dim).child(`[${p.type}]`)); }
+    }
+    flush(true);
+    if (!kids.length) return div();
+    const prev = index > 0 ? msgs[index - 1] : null;
+    if (mine) {
+      return h_flex().id(`ocmsgwrap-${m.id}`).w_full().gap(8).py(2)
+        .child(div().w(24).flex_none())
+        .child(v_flex().flex_1().min_w(0).gap(4).rounded(10).bg(t.raised).px(12).py(8)
+          .child(div().text_right().text_size(11).text_color(t.dim).child(["you", clock].filter(Boolean).join(" · ")))
+          .children(kids));
+    }
+    // Consecutive assistant messages merge into one turn: no repeat header.
+    const who = m.agent ?? m.type ?? "agent";
+    let row = v_flex().id(`ocmsgwrap-${m.id}`).w_full().gap(4).pb(2);
+    if (!prev || prev.type === "user") {
+      row = row.pt(2).child(h_flex().gap(6).items_center()
+        .child(div().size(7).flex_none().rounded(4).bg(t.accent))
+        .child(div().text_size(12).font_semibold().text_color(t.foreground).child(who))
+        .when(Boolean(clock), (el) => el.child(div().text_size(11).text_color(t.dim).child(clock))));
+    }
+    return row.children(kids);
+  }
+
+  ocDetailPane(t) {
+    const info = this.ocDetail?.info;
+    const all = this.ocDetail?.messages ?? [];
+    const msgs = all.filter((m) => m.text || (m.content ?? []).length).slice(-30);
+    const live = info && !info.outcome;
+    const updated = info?.time?.updated;
+    const ago = updated ? duration(Date.now() - updated) + " ago" : null;
+    const sub = info
+      ? [info.agent, info.model?.id, `${all.length} messages`, live ? "live" : ago].filter(Boolean).join(" · ")
+      : "loading…";
+    return v_flex().id("ocdetail").size_full().min_h(0).bg(t.canvas)
+      .child(h_flex().id("ocdetail-head").flex_none().gap(8).items_center().px(12).py(10).bg(t.chrome).border_b(1).border_color(t.border)
+        .child(this.status(t, { status: live ? "working" : "idle" }))
+        .child(v_flex().flex_1().min_w(0).gap(1)
+          .child(div().truncate().text_size(13).font_semibold().text_color(t.foreground).child(info?.title ?? this.ocDetailId))
+          .child(div().truncate().text_size(11.5).text_color(t.dim).child(sub)))
+        .child(h_flex().id("ocdetail-refresh").h(26).px(8).gap(5).flex_none().items_center().rounded(6)
+          .text_size(12).bg(t.chrome).text_color(t.muted)
+          .hover((s) => s.bg(t.hover).text_color(t.foreground))
+          .tooltip("Refresh transcript")
+          .on_click((_e, cx) => this.refreshDetail(cx, true))
+          .child("refresh"))
+        .when(!this.ocFollow, () => h_flex().id("ocdetail-latest").h(26).px(8).gap(5).flex_none().items_center().rounded(6)
+          .text_size(12).text_color(t.accent)
+          .hover((s) => s.text_color(t.foreground))
+          .tooltip("Jump to the latest message")
+          .on_click((_e, cx) => {
+            this.ocFollow = true;
+            try { this.ocScroll.scroll_to_bottom(); } catch { /* not mounted yet */ }
+            cx.notify();
+          })
+          .child("↓ latest")))
+      .when(this.ocDetailError, () => div().px(12).py(8).text_size(12).text_color(t.blocked).child(this.ocDetailError))
+      .when(!this.ocDetail && !this.ocDetailError, () => div().px(12).py(8).text_size(12).text_color(t.dim).child("Loading transcript…"))
+      .when(this.ocDetailNote && !this.ocDetailError, () => div().px(12).pt(6).text_size(11).text_color(t.dim).child(this.ocDetailNote))
+      .child(v_flex().id("ocdetail-body").flex_1().min_h(0).relative().px(12)
+        .on_scroll_wheel((_e, cx) => {
+          // The user took the wheel: stop following until they jump back.
+          if (this.ocFollow) { this.ocFollow = false; cx.notify(); }
+        })
+        .child(list("ocdetail-list", msgs.length,
+          (i) => msgs[i].id ?? `oc-${i}`,
+          (index) => this.ocMessage(t, msgs, index)).track_scroll(this.ocScroll))
+        .child(Scrollbar.vertical("ocdetail-list").absolute().inset_0()));
   }
 
   // Stamps agents whose state changed. Done and idle count as one: looking at a
@@ -301,6 +504,12 @@ export default class Agents extends View {
   render(cx) {
     const t = theme();
     if (props()?.sortMenu) return this.sortMenu(t);
+    if (props()?.ocDetail) {
+      // Pin to the latest message while following; a render-time call holds
+      // even when the list first mounts after a fetch lands.
+      if (this.ocFollow) { try { this.ocScroll.scroll_to_bottom(); } catch { /* not mounted yet */ } }
+      return this.ocDetailPane(t);
+    }
     const collapsed = narrow();
     const sort = sortOf();
     let list = agents();
