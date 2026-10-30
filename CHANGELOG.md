@@ -76,3 +76,18 @@
   the same way). `oc-limits` deleted from home and repo; its logic lives
   in `mods/my-tabs/main.js`. Note: `layout.clone`'s sibling `mod.clone`
   rewrote the clone's own asset paths automatically.
+- **Notification system (paused 2026-10-30, WIP in repo).** Key finding,
+  proven by pixel-checked probe tests: `notify()` is **name-bound to the
+  shipped `toast` mod** — neither a clone (`my-toast`, painted pink) nor
+  `toast-edited` intercepts it (toast rendered gray `37,39,43`, never
+  pink). Docs' "replaceable" is not reachable from a personal mod in this
+  build. Architecture instead: shipped toast keeps app events; our surface
+  is `mods/my-toast` as a root-level `floating` block (`edge: bottom,
+  align: end`) reading a `shared("notifs")` queue; other mods post via
+  `setShared`. Implemented: severity chip + glyph, title/body/action rows,
+  dismiss, `+N earlier` past 4, per-level TTL (info 5s, success 4s,
+  warning 8s, error sticky), hover pauses expiry via
+  `placement().hovered`, 1 s sweep writing only on change. Left to do when
+  resumed: real posters (limits thresholds, agent events); remove the
+  one-time `seed-*` cleanup in `init`. Probe + toast-edited folders
+  deleted; status block restored; empty queue collapses float to 0x0.

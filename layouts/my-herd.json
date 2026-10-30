@@ -190,5 +190,15 @@
   "traffic_lights": [
     12,
     16
+  ],
+  "floating": [
+    {
+      "id": "notifs",
+      "content": {
+        "mod": "my-toast"
+      },
+      "edge": "bottom",
+      "align": "end"
+    }
   ]
 }
