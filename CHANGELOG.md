@@ -1,5 +1,41 @@
 # my-herd customizations
 
+## 2026-10-30 (opencode subagents)
+
+- **OpenCode subagents in the sidebar (`mods/my-agents/`).** Cloned the
+  shipped `agents` mod (`mod.clone`, `cloned_from: agents 0.1.9`) and added
+  an OpenCode child-session tree under each main agent row: the mod maps
+  each agent terminal to its opencode session id (`hc get` records), polls
+  `opencode api session.list` every 8 s (via `cmd.exe /c`, same shim
+  workaround as `my-tabs`), groups sessions by `parentID`, and renders
+  depth-first `└`/`├` tree rows (`◈` marker, title, working spinner while
+  `outcome` is unset, idle dot when done). Parent urgency/fold counts
+  include the OpenCode kids, clicks focus the parent pane, tooltip shows
+  `agent · session-id`. The `my-herd` sidebar `agents` block now points at
+  `my-agents`. Verified: `herdr-app check` passes, `herdr-app status`
+  `errors: []`, `herdr-app shot` shows session-title rows (e.g. FM26
+  decode/chart tasks) under their parents. Shipped `agents` untouched.
+- **Removed the stale `herdr` TUI-multiplexer skill.** Deleted
+  `~/.agents/skills/herdr` (installed from `herdrdev/herdr`,
+  "terminal multiplexer ... Requires HERDR_ENV=1") and its
+  `.skill-lock.json` entry — it described the old TUI, not the Herdr
+  desktop app, and sent opencode looking for a `herdr` binary/session
+  that doesn't exist here. `hc --skill` / `herdr-app --skill` remain the
+  live manuals.
+
+## 2026-10-30 (orchestration)
+
+- **Opencode orchestration rules in `AGENTS.md`.** Researched opencode V2
+  (agents/subagents, permissions, tools) + `hc --skill` + `herdr-app --skill`
+  on this machine (`hc templates`: none, `hc ls`: t1/t2 live). Added section
+  "Opencode as orchestrator": opencode `subagent` for quick read-only work
+  vs `hc run --bg --name --cwd` teams for implementers/parallel/persistent/
+  cross-machine work; `first_message.sent` check, `wait --children`,
+  `send`/`read`/`interrupt`, file-based handoff, hidden-by-default workers
+  vs `herdr-app do` only when asked, adopt via `herdr.space/tab` labels,
+  cleanup-only-own + never `server stop`, suggested `hc *`/`herdr-app *`
+  shell allowlist.
+
 ## 2026-10-30
 
 - **Terminal background opacity 80%.** Cloned the shipped `main` layout to
