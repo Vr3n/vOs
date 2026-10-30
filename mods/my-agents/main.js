@@ -3,7 +3,7 @@
 
 import { View, div, image, svg, list } from "gpui-kit";
 import { v_flex, h_flex, TextView, Scrollbar, VirtualListScrollHandle } from "gpui-base";
-import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, hc } from "herdr";
+import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, hc, home } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -98,12 +98,56 @@ export default class Agents extends View {
     this.refreshOC(cx);
   }
 
+  // Proper subagent graph: the herdr-subagents opencode plugin maintains one
+  // tiny JSON file per session (<home>/.local/share/opencode/herdr-subagents/)
+  // with {id, parentID, title, agent, status, updatedAt} straight from the
+  // server event bus (session.created already carries id, parentID, title and
+  // agent; status/idle/execution events carry liveness). A node counts as
+  // live while its status is working/blocked on a fresh heartbeat (<2 min);
+  // stale working nodes belong to dead servers. Falls back to `session.list`
+  // when the journal is missing (servers predating the plugin).
+  nodeLive(s) {
+    if (s.updatedAt != null) {
+      return (s.status === "working" || s.status === "blocked") && (Date.now() - s.updatedAt < 120000);
+    }
+    return !s.outcome;
+  }
+
+  nodeStatus(s) {
+    if (s.status === "blocked") return "blocked";
+    if (s.status === "working") return "working";
+    if (s.status === "idle" || s.outcome) return "idle";
+    return "working";
+  }
+
+  nodeUpdated(s) {
+    return s?.updatedAt ?? s?.time?.updated ?? 0;
+  }
+
+  async readJournal() {
+    try {
+      const h = String(home()).replace(/\//g, "\\").replace(/\\$/, "");
+      const r = await exec("cmd.exe", ["/c", "type", `${h}\\.local\\share\\opencode\\herdr-subagents\\*.json`]);
+      const map = new Map();
+      for (const line of String(r.stdout).split("\n")) {
+        const t = line.trim();
+        if (!t.startsWith("{")) continue;
+        try {
+          const n = JSON.parse(t);
+          if (n?.id) map.set(n.id, n);
+        } catch { /* partial line; next tick */ }
+      }
+      return map;
+    } catch {
+      return null;
+    }
+  }
+
   // Maps agent terminal address -> its CURRENT opencode session id (via hc get
-  // records), then lists all sessions and groups children by parentID.
+  // records), then groups the journal (or session.list) graph by parentID.
   // A terminal's records accumulate every session it ever hosted, so with
   // several candidates pick the one matching the terminal's live title
-  // ("OC | <session title>"); else the most recently updated (current
-  // sessions go idle when you leave them, so recency ~= current).
+  // ("OC | <session title>"); else the most recently updated.
   refreshOC(cx) {
     // Lease, not a latch: exec/hc have no timeout, so a hung fetch must not
     // freeze polling forever. A run older than 30s is presumed dead and its
@@ -113,16 +157,22 @@ export default class Agents extends View {
     this.ocRefreshing = now;
     cx.spawn(async (cx) => {
       try {
-        const r = await exec("cmd.exe", ["/c", "opencode", "api", "session.list"]);
-        const data = JSON.parse(String(r.stdout).trim()).data ?? [];
-        const byId = new Map(data.map((s) => [s.id, s]));
+        const journal = await this.readJournal();
+        let sessions;
+        if (journal && journal.size) {
+          sessions = [...journal.values()];
+        } else {
+          const r = await exec("cmd.exe", ["/c", "opencode", "api", "session.list"]);
+          sessions = JSON.parse(String(r.stdout).trim()).data ?? [];
+        }
+        const byId = new Map(sessions.map((s) => [s.id, s]));
         const byParent = new Map();
-        for (const s of data) {
+        for (const s of sessions) {
           if (!s?.parentID) continue;
           if (!byParent.has(s.parentID)) byParent.set(s.parentID, []);
           byParent.get(s.parentID).push(s);
         }
-        for (const kids of byParent.values()) kids.sort((x, y) => (x.time?.created ?? 0) - (y.time?.created ?? 0));
+        for (const kids of byParent.values()) kids.sort((x, y) => (this.nodeUpdated(x) - this.nodeUpdated(y)));
         const addrSession = {};
         for (const a of agents()) {
           try {
@@ -135,14 +185,14 @@ export default class Agents extends View {
               const termTitle = String(o?.title ?? "").replace(/^OC\s*\|\s*/, "");
               const hit = termTitle ? ids.filter((id) => recs[id]?.title === termTitle) : [];
               if (hit.length) ids = hit;
-              else ids = [...ids].sort((x, y) => ((byId.get(y)?.time?.updated ?? 0) - (byId.get(x)?.time?.updated ?? 0))).slice(0, 1);
+              else ids = [...ids].sort((x, y) => (this.nodeUpdated(byId.get(y)) - this.nodeUpdated(byId.get(x)))).slice(0, 1);
             }
             if (ids.length) addrSession[a.address] = ids;
           } catch { /* keep polling next round */ }
         }
         // Dead terminals drop out by themselves; only redraw on real change —
-        // including outcome/title changes so running/done icons stay live.
-        const sig = JSON.stringify([addrSession, [...byParent].map(([k, v]) => [k, v.map((s) => [s.id, s.outcome ?? null, s.title ?? ""])])]);
+        // including status/title changes so running/done icons stay live.
+        const sig = JSON.stringify([addrSession, [...byParent].map(([k, v]) => [k, v.map((s) => [s.id, this.nodeStatus(s), s.title ?? ""])])]);
         if (sig !== this.ocSig) {
           this.addrSession = addrSession;
           this.ocByParent = byParent;
@@ -157,18 +207,19 @@ export default class Agents extends View {
   }
 
   // Depth-first OpenCode child sessions for an agent address, with tree lines.
-  // Finished sessions (outcome set) are hidden: the sidebar shows only live
-  // subagents, so idle rows never pile up under a running parent.
+  // Only live nodes are shown, so the tree never implies activity that
+  // already ended. Liveness comes from the journal (status + heartbeat),
+  // falling back to outcome when the journal is missing.
   ocKids(addr, lead = []) {
     const sessIds = this.addrSession[addr] ?? [];
     const out = [];
-    const kidsOf = (pid) => (this.ocByParent.get(pid) ?? []).filter((s) => !s.outcome);
+    const kidsOf = (pid) => (this.ocByParent.get(pid) ?? []).filter((s) => this.nodeLive(s));
     const walk = (pid, prefix) => {
       const kids = kidsOf(pid);
       kids.forEach((sess, i) => {
         const last = i === kids.length - 1;
         const lines = [...prefix, last ? "└" : "├"];
-        out.push({ sess, lines, live: !sess.outcome });
+        out.push({ sess, lines, live: true, status: this.nodeStatus(sess) });
         walk(sess.id, [...prefix, last ? "" : "│"]);
       });
     };
@@ -178,7 +229,7 @@ export default class Agents extends View {
         const last = i === kids.length - 1;
         // When several sessions share one terminal, restart lines per session.
         const lines = sessIds.length > 1 ? [...lead, last ? "└" : "├"] : [...lead, last ? "└" : "├"];
-        out.push({ sess, lines, live: !sess.outcome });
+        out.push({ sess, lines, live: true, status: this.nodeStatus(sess) });
         walk(sess.id, [...lead, last ? "" : "│"]);
       });
     });
@@ -187,7 +238,7 @@ export default class Agents extends View {
 
   ocRow(t, o, shown, compact, parentAddr) {
     const sess = o.sess;
-    const st = o.live ? "working" : "idle";
+    const st = o.status ?? (o.live ? "working" : "idle");
     const label = sess.title || sess.agent || sess.id;
     return h_flex()
       .id(`ocsub-${sess.id}`)
@@ -206,7 +257,7 @@ export default class Agents extends View {
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
       .child(div().mr(8).text_size(12.5).text_color(t.muted).child("◈"))
-      .child(div().flex_1().truncate().text_color(t.muted).child(label))
+      .child(div().flex_1().truncate().text_color(st === "working" ? t.foreground : t.muted).child(label))
       .child(this.status(t, { status: st }, compact));
   }
 
@@ -523,7 +574,7 @@ export default class Agents extends View {
     this.track(list, now);
     this.hold(list);
     const byPriority = sort.id === "priority";
-    const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => RANK[kidStatus(s.t, this.listed)] ?? 0), ...this.ocKids(a.address).map((o) => RANK[o.live ? "working" : "idle"] ?? 0))]));
+    const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => RANK[kidStatus(s.t, this.listed)] ?? 0), ...this.ocKids(a.address).map((o) => RANK[o.status ?? "working"] ?? 0))]));
     const rankOf = (a) => urgency.get(a.address);
     if (byPriority) list = [...list].sort((x, y) => rankOf(y) - rankOf(x) || this.since(y) - this.since(x) || y.seq - x.seq);
     this.prunePins(all);
@@ -535,7 +586,7 @@ export default class Agents extends View {
     const withKids = (a, i) => {
       const subs = collapsed ? [] : this.tree(all, a.address);
       const ocs = collapsed ? [] : this.ocKids(a.address);
-      const ocLike = ocs.map((o) => ({ t: { address: o.sess.id, status: o.live ? "working" : "idle" }, lines: o.lines }));
+      const ocLike = ocs.map((o) => ({ t: { address: o.sess.id, status: o.status ?? "working" }, lines: o.lines }));
       const r = row(a, i, [...subs, ...ocLike]);
       if (this.folded.has(a.address)) return [r];
       return [r, ...subs.map((s) => this.subRow(t, s, shown, byPriority)), ...ocs.map((o) => this.ocRow(t, o, shown, byPriority, a.address))];

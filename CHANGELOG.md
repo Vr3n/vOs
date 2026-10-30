@@ -1,5 +1,47 @@
 # my-herd customizations
 
+## 2026-10-30 (subagent journal plugin)
+
+- **Proper subagent detection: `herdr-subagents` opencode plugin.** Replaces
+  the `session.list` guessing (stale index, ghost sessions, no live status)
+  with ground truth from the server event bus. The plugin
+  (`~/.config/opencode/plugins/herdr-subagents.js`, mirrored at
+  `plugins/herdr-subagents.js` in this repo) keeps one single-line JSON file
+  per session under `~/.local/share/opencode/herdr-subagents/` with
+  `{id, parentID, title, agent, status, updatedAt}`. Shapes verified against
+  the SDK types and a live SSE capture: `session.created` already carries
+  id + parentID + title + agent; status/idle/execution/permission events
+  carry liveness; heartbeats throttle to 1/s; `session.deleted` removes the
+  file. One file per session so concurrent servers never clobber each other.
+- **`my-agents` reads the journal.** `readJournal()` pulls all node files in
+  one `type *.json`; the tree is built parent→child from real edges, live =
+  working/blocked on a <2 min heartbeat (dead servers go stale and vanish).
+  Falls back to `session.list` when the journal is absent. Status, urgency,
+  fold counts and the detail pane all flow from the same nodes. Verified:
+  a probe subagent journaled `{title, agent, parentID}` at birth and flipped
+  to idle on completion; `check` passes, `status` clean.
+- **Heads-up: restart your opencode TUIs.** The plugin loads at server
+  start, so running TUIs (old servers) don't report until restarted; until
+  then the sidebar keeps using the `session.list` fallback. `opencode
+  reload` activates it on the background service immediately.
+
+## 2026-10-30 (oc active-only)
+
+- **Sidebar shows only active subagents (`mods/my-agents/`).** Back to a
+  live-only tree: finished child sessions are filtered out of `ocKids`, so
+  the tree never implies activity that ended. Verified: zero live sessions
+  in `session.list`, sidebar clean, no rows anywhere. `check` passes,
+  `status` clean.
+
+## 2026-10-30 (oc finished greyed)
+
+- **Finished subagents visible but greyed (`mods/my-agents/`).** Reverted
+  the live-only filter: all child sessions render again, finished ones with
+  a dimmed label + idle dot, running ones with a foreground label +
+  working spinner — active work stands out at a glance while past work
+  stays reachable. Shot confirms greyed rows with idle dots under both
+  parents. `check` passes, `status` clean.
+
 ## 2026-10-30 (oc live-only)
 
 - **Sidebar shows only live subagents (`mods/my-agents/`).** Finished
