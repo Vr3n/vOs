@@ -1,5 +1,15 @@
 # my-herd customizations
 
+## 2026-10-31 (explicit hc orchestration rule)
+
+- **AGENTS.md: `hc` default is now an explicit rule, not a heuristic.** Any
+  coding task (edits, fixes, builds, tests, reviews) and any research task
+  (beyond one trivial lookup) must run on an `hc` child — a `hc run --bg`
+  team or a quick read-only `subagent` — not inline. Simple commands and
+  dumb tasks (single `ls`/`git status`, one-file reads, one-line lookups)
+  stay inline. The opencode `subagent` tool is demoted to the quick
+  read-only lane only.
+
 ## 2026-10-30 (subagent journal plugin)
 
 - **Proper subagent detection: `herdr-subagents` opencode plugin.** Replaces
