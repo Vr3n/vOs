@@ -1,5 +1,17 @@
 # my-herd customizations
 
+## 2026-11-02 (back to the tabs, canvas kept)
+
+- **`layouts/herdr-t3.json`** and **`patches/herdr-t3.json`**: the `view`
+  stack's `active` is `main` again, so the work area opens on the tab view
+  like it did before the canvas. Everything the canvas added is still there:
+  the `canvas` child, `mods/agents-canvas`, the window and the resize work —
+  `cmd-shift-a` still cycles canvas → tab → agent. Nothing was deleted.
+- Reason: sidebar selection stopped working while the canvas was the default
+  view. The sidebar is `t3-spaces` + `t3-agents`, which this change never
+  touched, so the likely culprit is the canvas holding the pointer over the
+  work area — unconfirmed, and not chased further.
+
 ## 2026-11-02 (the window's resize, done properly)
 
 - **`mods/agents-canvas`**: the resize handles were impossible to hit — 6px

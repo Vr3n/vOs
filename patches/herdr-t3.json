@@ -115,7 +115,7 @@
             {
               "id": "view",
               "type": "stack",
-              "active": "canvas",
+              "active": "main",
               "children": [
                 {
                   "id": "canvas",
