@@ -1,5 +1,120 @@
 # my-herd customizations
 
+## 2026-11-02 (herdr-t3 installed, with our brand and the limits chip)
+
+- **Third-party layout `herdr-t3` (JinJieBeWater/herdr-t3) installed** into
+  `~/.config/herdr-app` per the app's install recipe: `layouts/herdr-t3.json`
+  + `.svg`, and mods `t3-chrome`, `t3-spaces`, `t3-agents`, `t3-focus`,
+  `t3-tabs`, `t3-pane`, `t3-new-menu` (all `herdr-app check` pass). It runs
+  read-only `git status`/`rev-parse` in space folders and `hc machine ls`,
+  `hc label`; no network. Its `keys.json` was merged under
+  `layout:herdr-t3` as `cmd-shift-a` / `cmd-shift-s` only — its
+  `cmd-shift-b` was left out because we already use that key for
+  `layout.toggle:sidebar`.
+- **Our `my-brand` replaced its brand bar.** `brand` block → `mod my-brand`
+  at 73 px (its rings need 6+26+5+30+6). The T3 brand bar's spaces/focus
+  toggle button went with it; the T3 keys still switch the list.
+- **OpenCode limits chip moved into the T3 tab bar** (left of the `+`
+  button), as `mods/t3-tabs/oc-limits.js` plus three lines in `t3-tabs`'
+  `main.js`. `my-oc-limits` is now only the popover: it renders from the
+  `limits` the chip hands to `openOverlay`, so only one mod polls
+  `opencode api experimental.usage.limits` (once a minute).
+- `patches/` holds copies of the files that live inside third-party mods
+  (`t3-tabs/main.js`, `t3-tabs/oc-limits.js`) and our installed
+  `herdr-t3.json`, so a reinstall of those mods can be re-patched from here.
+
+## 2026-10-31 (galaxy out of the live home; my-herd → vr3n-os)
+
+- **The galaxy canvas left the live home (memory).** Deleted `mods/galaxy/` and
+  `layouts/my-galaxy.json` (and its now-orphan preview `layouts/my-galaxy.svg`)
+  from `~/.config/herdr-app` — the canvas was too heavy to keep running
+  alongside everything else. **Repo copies are kept as a backup**
+  (`mods/galaxy/`, `layouts/my-galaxy.json`, `layouts/my-galaxy.svg`); nothing
+  else changed. No layout references the mod any more, so
+  `herdr-app status` reports `errors: []`. `layouts/.state/` was not touched
+  (the app keeps its own entry for the deleted layout's clicks).
+- **The galaxy block was also in the shown layout; removed, and the layout is
+  now `vr3n-os`.** `my-herd.json` had grown an extra root column (id
+  `b860ebef…`, 320 px) holding `mod galaxy`, which is why the mod was still
+  active after the folder went. That block is gone; everything else is intact:
+  brand → `my-brand` (88 px, the Vr3n title + CPU/RAM/GPU rings), `my-tabs`,
+  the spaces/`my-agents` sidebar, the hidden Files/Changes panel, the status
+  bar, root gradient `#1b2434 → #0d1120`, `terminal_opacity: 0.8`, the
+  `my-toast` float. There is no layout rename command, so the rename followed
+  the file pattern: wrote `layouts/vr3n-os.json` with the cleaned tree,
+  switched the window to it, then deleted `layouts/my-herd.json`. Repo mirrors
+  it — `layouts/vr3n-os.json` added, `layouts/my-herd.json` removed.
+- Verified: `herdr-app status` → layout `vr3n-os`, `errors: []`; `herdr-app
+  check` passes on the referenced mods we own; `herdr-app shot` shows the Vr3n
+  brand with no canvas block.
+
+## 2026-10-31 (galaxy canvas)
+
+- **New `galaxy` mod + `my-galaxy` layout: agents as a galaxy canvas.** Cloned
+  the shipped `main` layout (`layout.clone`) and rebuilt the tree: sidebar
+  (spaces + `my-agents`, unchanged widths) on the left, our `my-tabs` bar on
+  top, then a 50/50 column - `galaxy` on top, a live `{ "agent": "focused" }`
+  terminal view below - with the hidden Files/Changes panel and the status bar
+  kept so `my-tabs`' panel buttons still work. Look matches `my-herd` (root
+  gradient `#1b2434 -> #0d1120`, `terminal_opacity: 0.8`, custom preview
+  `layouts/my-galaxy.svg`).
+- **The canvas is one pannable viewport** (`mods/galaxy/`): all spaces render
+  side by side at world coordinates; press-drag pans (a press moving <4 px is
+  still a click; wheel also pans; a `recenter` chip resets). Each space is a
+  galaxy: halo rings, seeded star field, nebula blobs, and its name floating
+  above. Parent agents are planets (layered circles for a lit-sphere look,
+  stable hue from a hash of the terminal address), subagents are moons on a
+  spinning orbit ring. Every node has a floating label: name, what it is
+  working on, `tokens · harness`.
+- **Data**: `agents()`/`terminals()` for the live graph and status; the
+  herdr-subagents journal for opencode subagent liveness; one
+  `opencode api session.list` call per 9 s for session titles, `parentID` and
+  token counts (`input+output+reasoning+cache.read`). Terminal -> session
+  mapping matches the live `OC | <title>` title against the session list
+  (`hc get` records only hold the newest two sessions, so they are a
+  fallback), refreshed every 20 s. Hover shows a status card (status, harness,
+  name, title, tokens, address); clicking a planet or moon runs
+  `agent.focus { terminal }` so the bottom block shows that agent's terminal.
+- Verified: `herdr-app check` passes, `herdr-app status` `errors: []`, shots of
+  three galaxies, two planets, two moons with live tokens; `agent.focus t15`
+  retargeted the live block. Tokens are `…` until the first session list lands
+  and `-` for agents with no opencode session (e.g. claude/codex).
+
+## 2026-10-31 (Vr3n brand with CPU/RAM/GPU rings)
+
+- **Sidebar brand is now "Vr3n" plus live CPU/RAM/GPU rings
+  (`mods/my-brand/`, cloned from shipped `workspace-chrome`).** The top-left
+  title text is `Vr3n`; below it one row of three ring gauges spans the
+  sidebar's full width, each with its `CPU` / `RAM` / `GPU` label beside the
+  ring and a hover tooltip. Values refresh every 5 s from `stats.vbs`, a
+  one-shot `cscript` read of Windows' own performance classes (no background
+  process, no `setTimeout`): `Win32_PerfFormattedData_PerfOS_Processor`
+  (`_Total`), `Win32_OperatingSystem` visible/free memory, and the busiest
+  3D `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine` engine. A
+  value that can't be read shows `-` on an empty ring. Arcs are tinted SVG
+  masks in 5% steps (`rings/`); the number stays exact. The `vr3n-os`
+  `brand` block points at the clone (88 px tall before the v3 restyle, 46
+  originally).
+- **Rings restyled (v3): sleek 30 px gauges, metric colors, >70 % red
+  blend.** Downsized 44 → 30 px with thin strokes (track + arc SVGs
+  regenerated at `stroke-width: 2.4` in the 36 viewBox → ~2 px on screen;
+  ~2.3 px per 5 % band), exact numbers still centered inside. Metric
+  colors: CPU purple `#a78bfa`, RAM light orange `#fdba74`, GPU keeps its
+  theme color (`t.done`). Above 70 % the arc blends into light red
+  `#f87171` across the top of the sweep - the metric-colored base arc
+  stops at its 70 % bucket and one butt-capped slice per 5 % step
+  (`rings/seg-70..100.svg`, generated with the same top-clockwise math as
+  the bucket arcs) layers over, each mixed metric→red by
+  `0.15 + 0.85·(step/5)` in `main.js`'s `mix()`, so the tint ramps in
+  smoothly and stays mild on warm colors (RAM's orange barely shifts;
+  CPU's purple gains a red tip as the value climbs). Live CPU 95 / RAM 83
+  already showed both cases; a forced 96/82/74 pass verified the full
+  ramp, then the real data path was restored (final shot confirms). The
+  `brand` block shrinks 88 → 74 px in both `layouts/vr3n-os.json` copies
+  (6 pt + 26 title + 5 gap + 30 rings + 6 pb). Data source unchanged.
+  `check` passes, `status` `errors: []`; shots of normal, forced and
+  final states, all pixel-zoomed.
+
 ## 2026-10-31 (explicit hc orchestration rule)
 
 - **AGENTS.md: `hc` default is now an explicit rule, not a heuristic.** Any

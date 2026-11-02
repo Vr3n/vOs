@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#0d1120"/>
+  <!-- sidebar -->
+  <rect x="0" y="0" width="58" height="200" fill="#141a24"/>
+  <rect x="0" y="0" width="58" height="200" fill="none" stroke="#1d2532"/>
+  <circle cx="12" cy="12" r="5" fill="#2b3648"/>
+  <rect x="8" y="26" width="42" height="4" rx="2" fill="#3a4761"/>
+  <rect x="8" y="36" width="34" height="4" rx="2" fill="#2a3446"/>
+  <rect x="8" y="46" width="38" height="4" rx="2" fill="#2a3446"/>
+  <rect x="8" y="120" width="42" height="4" rx="2" fill="#3a4761"/>
+  <rect x="8" y="130" width="30" height="4" rx="2" fill="#2a3446"/>
+  <rect x="8" y="140" width="26" height="4" rx="2" fill="#2a3446"/>
+  <!-- tab bar -->
+  <rect x="58" y="0" width="262" height="14" fill="#141a24"/>
+  <rect x="66" y="3" width="26" height="8" rx="2" fill="#232d3e"/>
+  <!-- galaxy canvas -->
+  <rect x="58" y="14" width="262" height="132" fill="#05070e"/>
+  <g fill="#cfe0ff">
+    <circle cx="90" cy="30" r="0.8"/><circle cx="140" cy="24" r="0.8"/><circle cx="210" cy="36" r="0.8"/>
+    <circle cx="250" cy="26" r="1"/><circle cx="300" cy="44" r="0.8"/><circle cx="120" cy="70" r="0.8"/>
+    <circle cx="176" cy="60" r="0.8"/><circle cx="286" cy="80" r="0.8"/><circle cx="100" cy="120" r="0.8"/>
+    <circle cx="196" cy="128" r="0.8"/><circle cx="256" cy="118" r="0.8"/><circle cx="160" cy="40" r="1"/>
+  </g>
+  <!-- galaxy 1: empty -->
+  <circle cx="112" cy="82" r="42" fill="#123024" opacity="0.5"/>
+  <circle cx="112" cy="82" r="42" fill="none" stroke="#1d4a37"/>
+  <circle cx="112" cy="82" r="28" fill="none" stroke="#1a3f30"/>
+  <text x="112" y="84" font-family="Geist, sans-serif" font-size="5" fill="#3f6b57" text-anchor="middle">no agents</text>
+  <!-- galaxy 2: one planet, two moons -->
+  <circle cx="196" cy="82" r="42" fill="#2a2118" opacity="0.5"/>
+  <circle cx="196" cy="82" r="42" fill="none" stroke="#4a3a24"/>
+  <circle cx="196" cy="82" r="20" fill="none" stroke="#3a2f20"/>
+  <text x="196" y="44" font-family="Geist, sans-serif" font-size="5.5" fill="#a9b8d4" text-anchor="middle">my-herd</text>
+  <text x="196" y="62" font-family="Geist, sans-serif" font-size="5.5" fill="#e9f1ff" text-anchor="middle">AGENTS.md rules for hc orch…</text>
+  <circle cx="196" cy="82" r="9" fill="#4a1622"/>
+  <circle cx="195" cy="81" r="7.5" fill="#e0568a"/>
+  <circle cx="193" cy="78" r="3.6" fill="#f9a9c4"/>
+  <circle cx="196" cy="82" r="14" fill="none" stroke="#a06a8a" stroke-dasharray="2 3"/>
+  <circle cx="179" cy="95" r="4" fill="#2b1a36"/>
+  <circle cx="179" cy="95" r="3" fill="#8f6ad4"/>
+  <text x="179" y="104" font-family="Geist, sans-serif" font-size="4" fill="#b79ae8" text-anchor="middle">vr3n-title</text>
+  <circle cx="213" cy="98" r="4" fill="#123028"/>
+  <circle cx="213" cy="98" r="3" fill="#3fc0a0"/>
+  <text x="213" y="107" font-family="Geist, sans-serif" font-size="4" fill="#7fd8c4" text-anchor="middle">galaxy-canvas</text>
+  <!-- galaxy 3 -->
+  <circle cx="278" cy="82" r="42" fill="#181a34" opacity="0.5"/>
+  <circle cx="278" cy="82" r="42" fill="none" stroke="#2c3260"/>
+  <circle cx="278" cy="82" r="20" fill="none" stroke="#232848"/>
+  <text x="278" y="44" font-family="Geist, sans-serif" font-size="5.5" fill="#a9b8d4" text-anchor="middle">f1_analysis</text>
+  <circle cx="278" cy="86" r="9" fill="#3a1036"/>
+  <circle cx="277" cy="85" r="7.5" fill="#d95ac0"/>
+  <circle cx="275" cy="82" r="3.6" fill="#f6a8e6"/>
+  <!-- live terminal -->
+  <rect x="58" y="150" width="262" height="50" fill="#111827"/>
+  <rect x="58" y="150" width="262" height="50" fill="none" stroke="#243046"/>
+  <g fill="#6d7893">
+    <rect x="66" y="160" width="120" height="3" rx="1.5" fill="#8b93a8"/>
+    <rect x="66" y="168" width="200" height="3" rx="1.5"/>
+    <rect x="66" y="175" width="180" height="3" rx="1.5"/>
+    <rect x="66" y="182" width="150" height="3" rx="1.5"/>
+    <rect x="66" y="189" width="90" height="3" rx="1.5"/>
+  </g>
+</svg>

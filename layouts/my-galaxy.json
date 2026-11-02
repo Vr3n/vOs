@@ -2,7 +2,7 @@
   "id": "root",
   "cloned_from": {
     "name": "main",
-    "version": "0.1.9"
+    "version": "0.1.10"
   },
   "type": "row",
   "children": [
@@ -89,21 +89,41 @@
         {
           "id": "work-body",
           "type": "row",
+          "padding": 8,
+          "gap": 8,
           "children": [
             {
-              "id": "main",
-              "type": "block",
-              "content": {
-                "tab": "active",
-                "pane": {
-                  "header": {
-                    "content": {
-                      "mod": "pane"
-                    },
-                    "reveal": "always",
-                    "height": 30,
-                    "position": "top"
+              "id": "stage",
+              "type": "column",
+              "gap": 8,
+              "children": [
+                {
+                  "id": "galaxy",
+                  "type": "block",
+                  "content": {
+                    "mod": "galaxy"
                   },
+                  "size": {
+                    "weight": 1
+                  },
+                  "min": 200,
+                  "background": "#05070e",
+                  "border": {
+                    "width": 1,
+                    "color": "#152238"
+                  },
+                  "radius": 12
+                },
+                {
+                  "id": "live",
+                  "type": "block",
+                  "content": {
+                    "agent": "focused"
+                  },
+                  "size": {
+                    "weight": 1
+                  },
+                  "min": 140,
                   "background": {
                     "gradient": ["#1b2434", "#0d1120"],
                     "angle": 165
@@ -112,23 +132,30 @@
                     "width": 1,
                     "color": "border"
                   },
-                  "focus": {
-                    "width": 1,
-                    "color": "accent"
-                  },
                   "radius": 10,
-                  "gap": 8,
-                  "lone": true
+                  "focus": {
+                    "border": {
+                      "width": 1,
+                      "color": "accent"
+                    }
+                  }
                 }
-              }
+              ]
             },
             {
               "id": "panel",
               "type": "column",
+              "hidden": true,
+              "size": {
+                "px": 368
+              },
+              "min": 280,
+              "max": 900,
               "children": [
                 {
                   "id": "panel-body",
                   "type": "stack",
+                  "active": "files",
                   "children": [
                     {
                       "id": "files",
@@ -144,20 +171,11 @@
                         "mod": "changes"
                       }
                     }
-                  ],
-                  "active": "files"
+                  ]
                 }
-              ],
-              "size": {
-                "px": 368
-              },
-              "min": 280,
-              "max": 900,
-              "hidden": true
+              ]
             }
-          ],
-          "padding": 8,
-          "gap": 8
+          ]
         },
         {
           "id": "status",
@@ -178,27 +196,12 @@
     "angle": 165
   },
   "terminal_opacity": 0.8,
-  "terminal_padding": [
-    14,
-    12
-  ],
+  "terminal_padding": [14, 12],
   "divider": {
     "width": 1,
     "color": "border"
   },
   "titlebar": "none",
-  "traffic_lights": [
-    12,
-    16
-  ],
-  "floating": [
-    {
-      "id": "notifs",
-      "content": {
-        "mod": "my-toast"
-      },
-      "edge": "bottom",
-      "align": "end"
-    }
-  ]
+  "traffic_lights": [12, 16],
+  "preview": "layouts/my-galaxy.svg"
 }

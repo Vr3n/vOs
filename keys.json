@@ -69,5 +69,9 @@
     "ctrl-shift-c": "terminal.copy",
     "ctrl-shift-v": "terminal.paste",
     "ctrl-v": "terminal.paste_image"
+  },
+  "layout:herdr-t3": {
+    "cmd-shift-a": "t3-tabs.view",
+    "cmd-shift-s": "t3-focus.settle"
   }
 }
