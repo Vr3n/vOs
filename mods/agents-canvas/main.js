@@ -55,14 +55,14 @@ function openTerm(addr, w, h, at) {
           type: "row",
           children: [
             { id: "term", type: "block", size: { weight: 1 }, content: { terminal: addr } },
-            part("grip-r", { grip: "right" }, { px: 6 }),
+            part("grip-r", { grip: "right" }, { px: 22 }),
           ],
         },
         {
           id: "foot",
           type: "row",
-          size: { px: 12 },
-          children: [part("grip-b", { grip: "bottom" }, { weight: 1 }), part("grip-c", { grip: "corner" }, { px: 14 })],
+          size: { px: 18 },
+          children: [part("grip-b", { grip: "bottom" }, { weight: 1 }), part("grip-c", { grip: "corner" }, { px: 26 })],
         },
       ],
     },
@@ -88,11 +88,12 @@ export default class Canvas extends View {
     this.origin = { x: 276, y: 42 }; // until the first pointer move says otherwise
     this.ptr = null;
     this.pv = null; // { addr, id }
+    this.hot = null; // the grip the pointer is on
     this.out = 0; // close token
     this.in = 0; // open token
     const p = props() ?? {};
     if (p.bar || p.grip) return; // only the canvas keeps clocks
-    for (const k of ["agent.window.hit", "agent.window.err", "agent.window.pos", "agent.window.down", "agent.window.up", "agent.window.log", "agent.window.vp", "agent.window.app"])
+    for (const k of ["agent.window.hit", "agent.window.err", "agent.window.pos", "agent.window.down", "agent.window.log", "agent.window.vp", "agent.window.app", "agent.window.hot"])
       if (shared(k) != null) setShared(k, null);
     if (typeof shared("agent.window.size") !== "object") setShared("agent.window.size", null);
     cx.timer.every(1000, (cx) => cx.notify());
@@ -165,15 +166,34 @@ export default class Canvas extends View {
     const d = shared("agent.window.drag");
     if (!d) return;
     const p = window.mouse_position();
-    if (p.x === d.x && p.y === d.y) {
-      if (Date.now() - d.moved > 700) setShared("agent.window.drag", null);
+    const now = Date.now();
+    const stopped = () => setShared("agent.window.drag", null);
+    // A jump this big in one tick is not a drag: the button came up while the
+    // pointer was ahead of the edge, and this is the pointer leaving.
+    if (Math.abs(p.x - d.px) > 100 || Math.abs(p.y - d.py) > 100) return stopped();
+    const w = Math.round(d.edge === "bottom" ? d.bw : Math.max(MIN.w, d.bw + (p.x - d.sx) / zoom()));
+    const h = Math.round(d.edge === "right" ? d.bh : Math.max(MIN.h, d.bh + (p.y - d.sy) / zoom()));
+    const changed = w !== d.w || h !== d.h;
+    const up = shared("agent.window.up");
+    if (up) {
+      if (changed) {
+        setShared("agent.window.size", { w, h });
+        openTerm(d.addr, w, h);
+      }
+      setShared("agent.window.up", null);
+      return stopped();
+    }
+    if (changed) {
+      // One re-open per 55ms: a size is a close and an open, and a storm of them
+      // makes the window lag the pointer instead of following it.
+      if (now - d.last < 55) return;
+      setShared("agent.window.size", { w, h });
+      setShared("agent.window.drag", { ...d, w, h, px: p.x, py: p.y, t: now, last: now });
+      openTerm(d.addr, w, h);
       return;
     }
-    const w = Math.round(d.edge === "bottom" ? d.w : Math.max(MIN.w, d.w + (p.x - d.x) / zoom()));
-    const h = Math.round(d.edge === "right" ? d.h : Math.max(MIN.h, d.h + (p.y - d.y) / zoom()));
-    setShared("agent.window.size", { w, h });
-    setShared("agent.window.drag", { ...d, x: p.x, y: p.y, w, h, moved: Date.now() });
-    openTerm(d.addr, w, h);
+    if (p.x !== d.px || p.y !== d.py) setShared("agent.window.drag", { ...d, px: p.x, py: p.y, t: now });
+    else if (now - d.t > 600) stopped(); // no release reached us; the pointer rested
   }
 
   // --- the window's bar ---------------------------------------------------
@@ -247,21 +267,34 @@ export default class Canvas extends View {
     return div()
       .id(`grip-${edge}`)
       .size_full()
-      .bg(t.chrome) // painted, or it has nothing to hit-test
+      .bg(this.hot === edge ? t.border : t.chrome) // painted, or nothing to hit-test
+      .on_hover((h, cx) => {
+        if ((this.hot === edge) === h) return;
+        this.hot = h ? edge : null;
+        cx.notify();
+      })
       .when(edge !== "bottom", (el) => el.cursor_col_resize())
       .when(edge !== "right", (el) => el.cursor_row_resize())
+      // The release lands on whichever grip is under the pointer by then, which
+      // is why it is the drag that ends, not the grip that started it.
+      .on_mouse_up("left", () => setShared("agent.window.up", Date.now()))
       .on_mouse_down("left", (e, cx) => {
         cx.stop_propagation(); // otherwise the press drags the window
+        if (isFull()) return; // a full screen window has nothing to grow into
         const s = winSize();
-        setShared("agent.window.full", false);
         setShared("agent.window.drag", {
           addr: props()?.terminal,
           edge,
-          x: e.position.x,
-          y: e.position.y,
+          sx: e.position.x, // the anchor the whole drag is measured from
+          sy: e.position.y,
+          bw: s.w,
+          bh: s.h,
           w: s.w,
           h: s.h,
-          moved: Date.now(),
+          px: e.position.x,
+          py: e.position.y,
+          t: Date.now(),
+          last: 0,
         });
       });
   }
@@ -377,6 +410,8 @@ export default class Canvas extends View {
       .size_full()
       .bg(t.canvas)
       .p(16)
+      // A press here means the window behind is not being dragged after all.
+      .on_mouse_down("left", () => setShared("agent.window.drag", null))
       .on_size_change((size, _cx) => (this.size = size))
       .on_mouse_move((e, _cx) => {
         this.ptr = e.position;

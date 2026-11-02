@@ -1,5 +1,27 @@
 # my-herd customizations
 
+## 2026-11-02 (the window's resize, done properly)
+
+- **`mods/agents-canvas`**: the resize handles were impossible to hit — 6px
+  before the zoom, which the window's own frame ate down to about two pixels,
+  in the terminal's own background colour. They are 22px on the right, 18px
+  along the bottom and 26px in the corner now, they light up under the pointer
+  and the cursor turns into the resize arrow, so the edge is findable.
+- The drag also ends when the button comes up. A window opened while a press is
+  down closes itself, so the frame cannot be re-opened from inside the grip's
+  own press — but `on_mouse_up` still arrives at whichever grip is under the
+  pointer by then, and that is what hands the drag back. Before this the drag
+  lived on a timer and kept resizing the window while the pointer travelled
+  after the release, which is exactly how it felt.
+- Three fallbacks for when no release arrives (the pointer outran the edge, or
+  the press never reached a grip): a jump over 100px in one tick is the pointer
+  leaving, not a drag, so it is dropped; 600ms of a resting pointer ends it; and
+  a press anywhere in the canvas ends it. The size a drag settles on is applied
+  once more on the way out, so the release lands on the exact size.
+- Nothing upstream was touched: GPUI's `h_resizable`/`resizable_panel` cannot
+  wrap a live `{ terminal }` block (only a layout can hold one) and herdr has no
+  overlay-resize call, so a frame size can only come from the open it was given.
+
 ## 2026-11-02 (agent window)
 
 - **`mods/agents-canvas`**: clicking a card opens that terminal in a window
