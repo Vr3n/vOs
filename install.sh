@@ -2,7 +2,7 @@
 # Puts this repo's Herdr setup into the live app home (~/.config/herdr-app).
 # Usage: sh install.sh          macOS / Linux / WSL / git-bash
 #        zsh install.sh
-# Then pick the layout: herdr-app do layout.switch '{"name":"herdr-t3"}'
+# Then pick the layout: herdr-app do layout.switch --name herdr-t3
 #
 # - copies our layouts and mods, skipping `galaxy` (backup only)
 # - clones the third-party herdr-t3 layout + mods, then applies patches/
@@ -53,7 +53,7 @@ fs.writeFileSync(p, JSON.stringify(keys, null, 2));
 ' "$app/keys.json"
 
 if command -v herdr-app >/dev/null 2>&1; then
-  for name in my-brand my-oc-limits t3-tabs t3-chrome t3-spaces t3-agents t3-focus t3-pane t3-new-menu; do
+  for name in my-brand my-oc-limits agents-canvas t3-tabs t3-chrome t3-spaces t3-agents t3-focus t3-pane t3-new-menu; do
     herdr-app check "$app/mods/$name" || echo "check failed: $name" >&2
   done
   herdr-app do layout.switch --name herdr-t3 >/dev/null && echo "Showing herdr-t3."

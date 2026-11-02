@@ -18,9 +18,15 @@ const mark = (t, s) => s === "working" ? svg("mods/workspace-chrome/spinner.svg"
   : s === "blocked" ? blockedMark(t)
   : div().size(7).flex_none().rounded_full().bg(t.done);
 
-// The work area is a stack in the layout: the active tab ("main"), or one agent full size ("agent").
+// The work area is a stack in the layout: the agent canvas, the active tab ("main"), or one
+// agent full size ("agent"). The toggle walks the stack's children in order.
 const agentView = () => find(layout(), "view")?.active === "agent";
-const switchView = () => run("layout.select", { stack: "view", child: agentView() ? "main" : "agent" });
+const switchView = () => {
+  const stack = find(layout(), "view");
+  const ids = (stack?.children ?? []).map((c) => c.id);
+  const i = ids.indexOf(stack?.active);
+  run("layout.select", { stack: "view", child: ids[(i + 1) % (ids.length || 1)] ?? "main" });
+};
 
 function find(node, id) {
   if (node?.id === id) return node;

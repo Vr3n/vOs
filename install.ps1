@@ -64,7 +64,7 @@ $herdr = Get-Command herdr-app -ErrorAction SilentlyContinue
 if ($herdr) {
   # Same for herdr-app: its output is progress, not a failure unless the exit code says so.
   $ErrorActionPreference = 'Continue'
-  foreach ($name in 'my-brand', 'my-oc-limits', 't3-tabs', 't3-chrome', 't3-spaces', 't3-agents', 't3-focus', 't3-pane', 't3-new-menu') {
+  foreach ($name in 'my-brand', 'my-oc-limits', 'agents-canvas', 't3-tabs', 't3-chrome', 't3-spaces', 't3-agents', 't3-focus', 't3-pane', 't3-new-menu') {
     & $herdr.Source check (Join-Path $app ('mods\' + $name))
     if ($LASTEXITCODE -ne 0) { Write-Warning "check failed: $name" }
   }

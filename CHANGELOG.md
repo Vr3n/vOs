@@ -1,5 +1,24 @@
 # my-herd customizations
 
+## 2026-11-02 (agent canvas)
+
+- **`mods/agents-canvas`**: the work area is a canvas of agents now: one card
+  per agent (status dot, program icon, name, space · tab), its sub-agents as
+  `└` rows under it. Hovering a card or a sub-agent row shows that terminal
+  live in a popover (`peek` bar + a real terminal block, so it is the agent's
+  own output, not a redraw). The popover opens 90ms after the pointer lands
+  and closes 200ms after it leaves, so sweeping the grid does not flash.
+  Clicking a card focuses it and switches to the full-size agent view.
+- **`layouts/herdr-t3.json`** (and `patches/`): the `view` stack gained a
+  third child `canvas`, `{ "mod": "agents-canvas" }`, active by default. The
+  tab view (`main`) and the full-size agent view (`agent`) are unchanged.
+- **`patches/t3-tabs-main.js`**: `switchView` walks the `view` stack's
+  children in order instead of toggling `main`/`agent`, so cmd-shift-a cycles
+  canvas → tab → agent.
+- Sub-agents come from `terminals()`' `parent` field, the same source
+  `t3-agents` uses; a sub-agent without a pane (so not in `agents()`) takes
+  its status from the terminal itself.
+
 ## 2026-11-02 (one-command install)
 
 - **`install.sh` / `install.ps1` + `README.md`**: clone the repo and run one

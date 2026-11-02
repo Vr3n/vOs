@@ -6,7 +6,10 @@
   },
   "type": "row",
   "preview": "layouts/herdr-t3.svg",
-  "divider": { "width": 1, "color": "border" },
+  "divider": {
+    "width": 1,
+    "color": "border"
+  },
   "children": [
     {
       "id": "sidebar",
@@ -35,23 +38,36 @@
                 {
                   "id": "spaces",
                   "type": "block",
-                  "size": { "weight": 1 },
+                  "size": {
+                    "weight": 1
+                  },
                   "min": 90,
-                  "content": { "mod": "t3-spaces" }
+                  "content": {
+                    "mod": "t3-spaces"
+                  }
                 },
                 {
                   "id": "agents",
                   "type": "block",
-                  "size": { "weight": 1 },
+                  "size": {
+                    "weight": 1
+                  },
                   "min": 90,
-                  "content": { "mod": "t3-agents" }
+                  "content": {
+                    "mod": "t3-agents"
+                  }
                 }
               ]
             },
             {
               "id": "focus",
               "type": "block",
-              "content": { "mod": "t3-focus", "props": { "newMenu": "t3-new-menu" } }
+              "content": {
+                "mod": "t3-focus",
+                "props": {
+                  "newMenu": "t3-new-menu"
+                }
+              }
             }
           ]
         },
@@ -84,9 +100,13 @@
         {
           "id": "tabs",
           "type": "block",
-          "size": { "px": 40 },
+          "size": {
+            "px": 40
+          },
           "window_drag": true,
-          "content": { "mod": "t3-tabs" }
+          "content": {
+            "mod": "t3-tabs"
+          }
         },
         {
           "id": "work-body",
@@ -95,8 +115,15 @@
             {
               "id": "view",
               "type": "stack",
-              "active": "main",
+              "active": "canvas",
               "children": [
+                {
+                  "id": "canvas",
+                  "type": "block",
+                  "content": {
+                    "mod": "agents-canvas"
+                  }
+                },
                 {
                   "id": "main",
                   "type": "block",
@@ -129,28 +156,39 @@
                 {
                   "id": "agent",
                   "type": "block",
-                  "content": { "agent": "focused" },
+                  "content": {
+                    "agent": "focused"
+                  },
                   "background": "background",
                   "radius": 8
                 }
               ]
             }
           ],
-          "padding": [2, 8],
+          "padding": [
+            2,
+            8
+          ],
           "gap": 8
         },
         {
           "id": "work-bottom-inset",
           "type": "row",
           "children": [],
-          "size": { "px": 6 }
+          "size": {
+            "px": 6
+          }
         },
         {
           "id": "status",
           "type": "block",
           "hidden": true,
-          "size": { "px": 28 },
-          "content": { "mod": "workspace-status" }
+          "size": {
+            "px": 28
+          },
+          "content": {
+            "mod": "workspace-status"
+          }
         }
       ],
       "resizable": false
