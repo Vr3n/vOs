@@ -1,14 +1,20 @@
 // The canvas: one card per agent, its subagents as rows under the card.
-// Hovering a card (or a subagent row) shows that terminal live in a popover.
+// Hovering a card (or a subagent row) shows that terminal live in a popover;
+// clicking it opens the terminal in a window: our bar on top, a grip on the
+// right edge, bottom edge and corner. Herdr has no overlay resize call, so a
+// size is a close and an open: a grip press hands the drag to the canvas's
+// clock, which re-opens the window at the dragged size.
 
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { agents, terminals, run, theme, openOverlay, closeOverlay } from "herdr";
+import { agents, terminals, run, theme, shared, setShared, props, layout, openOverlay, closeOverlay, settings } from "herdr";
 
 const WORD = { working: "working", blocked: "needs you", done: "done", idle: "idle" };
 const CARD_W = 232;
 const PV_W = 620;
 const PV_H = 340;
+const DEF = { w: 1000, h: 660 };
+const MIN = { w: 380, h: 240 };
 
 function icon(p, size, color) {
   if (!p?.icon) return null;
@@ -16,6 +22,65 @@ function icon(p, size, color) {
 }
 const base = (p) => String(p ?? "").replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "";
 const name = (a) => (a.title || "").replace(/^[^\p{L}\p{N}]+/u, "").trim() || a.program?.name || a.address;
+const zoom = () => settings()?.zoom ?? 1;
+// Where the app window is: the canvas sits at its origin and fills the rest.
+const winSize = () => {
+  const s = shared("agent.window.size");
+  return s && s.w >= MIN.w && s.h >= MIN.h ? s : DEF;
+};
+const isFull = () => shared("agent.window.full") === true;
+
+function findNode(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+// The terminal in a window: our bar above it. Same `key` every time, so the
+// app keeps the spot it was dropped in across re-opens.
+function openTerm(addr, w, h, at) {
+  const part = (id, props, size) => ({ id, type: "block", size, content: { mod: "agents-canvas", props: { terminal: addr, ...props } } });
+  return openOverlay({
+    layout: {
+      id: "termwin",
+      type: "column",
+      gap: 0,
+      children: [
+        part("bar", { bar: true }, { px: 30 }),
+        {
+          id: "mid",
+          type: "row",
+          children: [
+            { id: "term", type: "block", size: { weight: 1 }, content: { terminal: addr } },
+            part("grip-r", { grip: "right" }, { px: 6 }),
+          ],
+        },
+        {
+          id: "foot",
+          type: "row",
+          size: { px: 12 },
+          children: [part("grip-b", { grip: "bottom" }, { weight: 1 }), part("grip-c", { grip: "corner" }, { px: 14 })],
+        },
+      ],
+    },
+    kind: "window",
+    key: at ? `agent:${addr}:full` : `agent:${addr}`,
+    width: w,
+    height: h,
+    ...(at ? { at } : {}),
+  });
+}
+
+// The whole app window, from its top-left: a window is sized in pre-zoom px
+// but placed in window px, so the size is divided by the zoom.
+function openFull(addr) {
+  // The whole window: `width` is in pre-zoom px, the place in window px.
+  const v = window.viewport_size();
+  return openTerm(addr, Math.round(v.width / zoom()), Math.round(v.height / zoom()), { x: 0, y: 0 });
+}
 
 export default class Canvas extends View {
   init(_props, cx) {
@@ -25,10 +90,16 @@ export default class Canvas extends View {
     this.pv = null; // { addr, id }
     this.out = 0; // close token
     this.in = 0; // open token
+    const p = props() ?? {};
+    if (p.bar || p.grip) return; // only the canvas keeps clocks
+    for (const k of ["agent.window.hit", "agent.window.err", "agent.window.pos", "agent.window.down", "agent.window.up", "agent.window.log", "agent.window.vp", "agent.window.app"])
+      if (shared(k) != null) setShared(k, null);
+    if (typeof shared("agent.window.size") !== "object") setShared("agent.window.size", null);
     cx.timer.every(1000, (cx) => cx.notify());
+    cx.timer.every(40, () => this.dragging());
   }
 
-  // --- preview ------------------------------------------------------------
+  // --- preview and window -------------------------------------------------
 
   preview(addr) {
     if (this.pv?.addr === addr) return;
@@ -81,6 +152,120 @@ export default class Canvas extends View {
     });
   }
 
+  openWin(addr) {
+    this.closePreview();
+    if (isFull()) return openFull(addr);
+    const s = winSize();
+    openTerm(addr, s.w, s.h);
+  }
+
+  // The press that starts a drag is followed here: the grip it started on is
+  // replaced by every re-open, so the clock, not the grip, follows the pointer.
+  dragging() {
+    const d = shared("agent.window.drag");
+    if (!d) return;
+    const p = window.mouse_position();
+    if (p.x === d.x && p.y === d.y) {
+      if (Date.now() - d.moved > 700) setShared("agent.window.drag", null);
+      return;
+    }
+    const w = Math.round(d.edge === "bottom" ? d.w : Math.max(MIN.w, d.w + (p.x - d.x) / zoom()));
+    const h = Math.round(d.edge === "right" ? d.h : Math.max(MIN.h, d.h + (p.y - d.y) / zoom()));
+    setShared("agent.window.size", { w, h });
+    setShared("agent.window.drag", { ...d, x: p.x, y: p.y, w, h, moved: Date.now() });
+    openTerm(d.addr, w, h);
+  }
+
+  // --- the window's bar ---------------------------------------------------
+
+  bar(t) {
+    const p = props() ?? {};
+    const addr = p.terminal;
+    const a = agents().find((x) => x.address === addr);
+    const term = terminals().find((x) => x.address === addr);
+    const st = a?.status ?? term?.status ?? null;
+    const title = a ? name(a) : term?.title || term?.name || addr;
+    const pic = icon(a?.program ?? term?.program, 13, t.foreground);
+    const canCanvas = Boolean(findNode(layout(), "view")?.children?.some((c) => c.id === "canvas"));
+    const btn = (id, label, on) =>
+      div()
+        .id(id)
+        .px(7)
+        .py(2)
+        .rounded(5)
+        .text_size(11)
+        .flex_none()
+        .text_color(t.muted)
+        .cursor_pointer()
+        .hover((s) => s.bg(t.hover).text_color(t.foreground))
+        // A press on a window overlay would drag it; stop that and act on press.
+        .on_mouse_down("left", (_e, cx) => {
+          cx.stop_propagation(); // a press would otherwise drag the window
+          on();
+        })
+        .child(label);
+    return h_flex()
+      .id("term-bar")
+      .size_full()
+      .px(9)
+      .gap(7)
+      .items_center()
+      .bg(t.chrome)
+      .border_b(1)
+      .border_color(t.border)
+      .text_size(12)
+      .child(this.dot(t, st))
+      .when(Boolean(pic), (el) => el.child(pic))
+      .child(div().truncate().font_semibold().text_color(t.foreground).child(title))
+      .when(Boolean(st), (el) =>
+        el.child(div().text_size(10).flex_none().text_color(t[st] ?? t.dim).child(WORD[st] ?? st)),
+      )
+      .child(div().flex_1())
+      .child(
+        btn(
+          "win-full",
+          svg("mods/workspace-chrome/square.svg").size(12).flex_none().text_color(t.muted),
+          () => toggleFull(addr, p.overlay),
+        ),
+      )
+      .when(canCanvas, (el) =>
+        el.child(
+          btn("win-canvas", "canvas", () => {
+            closeOverlay(p.overlay);
+            run("layout.select", { stack: "view", child: "canvas" });
+          }),
+        ),
+      )
+      .child(btn("win-close", svg("mods/pane/close.svg").size(12).flex_none().text_color(t.muted), () => closeOverlay(p.overlay)));
+  }
+
+  // --- grips --------------------------------------------------------------
+
+  // The grips are blocks of their own in the window's layout, so the terminal
+  // keeps every pixel inside them. A press records, the release resizes.
+  grip(t, edge) {
+    return div()
+      .id(`grip-${edge}`)
+      .size_full()
+      .bg(t.chrome) // painted, or it has nothing to hit-test
+      .when(edge !== "bottom", (el) => el.cursor_col_resize())
+      .when(edge !== "right", (el) => el.cursor_row_resize())
+      .on_mouse_down("left", (e, cx) => {
+        cx.stop_propagation(); // otherwise the press drags the window
+        const s = winSize();
+        setShared("agent.window.full", false);
+        setShared("agent.window.drag", {
+          addr: props()?.terminal,
+          edge,
+          x: e.position.x,
+          y: e.position.y,
+          w: s.w,
+          h: s.h,
+          moved: Date.now(),
+        });
+      });
+  }
+
   // --- data ---------------------------------------------------------------
 
   tree() {
@@ -98,7 +283,7 @@ export default class Canvas extends View {
     return div().size(7).rounded_full().flex_none().bg(t[status] ?? t.dim);
   }
 
-  row(t, { addr, title, status, program, sub }) {
+  row(t, { addr, title, status, sub }) {
     const hovering = this.pv?.addr === addr;
     return h_flex()
       .id(`row-${addr}`)
@@ -111,10 +296,7 @@ export default class Canvas extends View {
       .when(hovering, (el) => el.bg(t.hover))
       .hover((s) => s.bg(t.hover))
       .on_hover((on, cx) => (on ? this.enter(addr, cx) : this.leave(addr, cx)))
-      .on_click((_e, _cx) => {
-        run("agent.focus", { terminal: addr });
-        this.closePreview();
-      })
+      .on_click((_e, _cx) => this.openWin(addr))
       .child(div().flex_none().text_color(t.dim).child(sub ? "└" : ""))
       .child(this.dot(t, status))
       .child(div().text_size(11).truncate().text_color(t.muted).child(title))
@@ -148,11 +330,7 @@ export default class Canvas extends View {
           .rounded(8)
           .hover((s) => s.bg(t.hover))
           .on_hover((on, cx) => (on ? this.enter(a.address, cx) : this.leave(a.address, cx)))
-          .on_click((_e, _cx) => {
-            run("agent.focus", { terminal: a.address });
-            run("layout.select", { stack: "view", child: "agent" });
-            this.closePreview();
-          })
+          .on_click((_e, _cx) => this.openWin(a.address))
           .child(
             h_flex()
               .w_full()
@@ -173,17 +351,27 @@ export default class Canvas extends View {
               .child(div().flex_1().truncate().child(where || a.address)),
           ),
       )
-      .when(kids.length > 0, (el) => el.children(kids.map((k) => this.row(t, {
-        addr: k.address,
-        title: k.title || k.name || k.template || k.address,
-        status: agents().find((x) => x.address === k.address)?.status ?? k.status ?? null,
-        sub: true,
-      }))));
+      .when(kids.length > 0, (el) =>
+        el.children(
+          kids.map((k) =>
+            this.row(t, {
+              addr: k.address,
+              title: k.title || k.name || k.template || k.address,
+              status: agents().find((x) => x.address === k.address)?.status ?? k.status ?? null,
+              sub: true,
+            }),
+          ),
+        ),
+      );
   }
 
   render(_cx) {
     const t = theme();
+    const p = props() ?? {};
+    if (p.bar) return this.bar(t);
+    if (p.grip) return this.grip(t, p.grip);
     const { cards, kids } = this.tree();
+
     return v_flex()
       .id("agents-canvas")
       .size_full()
@@ -192,7 +380,11 @@ export default class Canvas extends View {
       .on_size_change((size, _cx) => (this.size = size))
       .on_mouse_move((e, _cx) => {
         this.ptr = e.position;
-        const o = e.bounds?.origin;
+        // No bounds while the element is unpainted, but the pointer's window and
+        // local positions give the origin just as well.
+        const o =
+          e.bounds?.origin ??
+          (e.local_position ? { x: e.position.x - e.local_position.x, y: e.position.y - e.local_position.y } : null);
         if (o) this.origin = { x: o.x, y: o.y };
       })
       .child(
@@ -207,4 +399,14 @@ export default class Canvas extends View {
           .children(cards.map((a) => this.card(t, a, kids.get(a.address) ?? []))),
       );
   }
+}
+
+// The bar's square: the whole window, or back to the size it was.
+function toggleFull(addr, overlay) {
+  const full = !isFull();
+  setShared("agent.window.full", full);
+  closeOverlay(overlay);
+  const s = winSize();
+  if (full) return openFull(addr);
+  openTerm(addr, s.w, s.h);
 }

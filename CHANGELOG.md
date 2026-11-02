@@ -1,5 +1,27 @@
 # my-herd customizations
 
+## 2026-11-02 (agent window)
+
+- **`mods/agents-canvas`**: clicking a card opens that terminal in a window
+  over the canvas: our own bar (dot, icon, name, status, then the square, the
+  `canvas` way back and the ✕), the live terminal under it, and a thin grip
+  down the right edge, along the bottom edge and in the corner.
+- Dragging a grip resizes the window, and the size is kept for the next one.
+  Herdr has no overlay-resize call, so a size is a close and an open: the grip
+  press writes the edge and the start size to `shared()`, and the canvas's
+  40ms clock follows `window.mouse_position()` and re-opens the window at the
+  dragged size. The drag ends when the pointer stands still for 700ms.
+- Trap for anyone touching this: a window opened **while a press is down**
+  closes itself again, so the drag cannot end on the release — and a press the
+  mod does not stop drags the window, which is why `stop_propagation()` runs
+  first in the grip. `on_mouse_up` is not delivered once the pointer has left
+  the 6px grip, so there is no release to hang the final size on.
+- The square is full screen and back: `width`/`height` in an overlay spec are
+  px or a share of the window (`1` is a px, not a share), so full screen is
+  `window.viewport_size() / settings().zoom` placed at `{x: 0, y: 0}`, and the
+  window remembers that spot under its own key (`agent:<addr>:full`) because a
+  remembered window keeps its place and ignores `at`.
+
 ## 2026-11-02 (agent canvas)
 
 - **`mods/agents-canvas`**: the work area is a canvas of agents now: one card
