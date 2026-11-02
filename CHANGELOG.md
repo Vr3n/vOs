@@ -1,5 +1,23 @@
 # my-herd customizations
 
+## 2026-11-02 (one-command install)
+
+- **`install.sh` / `install.ps1` + `README.md`**: clone the repo and run one
+  command to get the exact live setup back. Both scripts copy `layouts/` and
+  every personal mod (`galaxy` is a backup only and is skipped), clone
+  `JinJieBeWater/herdr-t3` for the `t3-*` mods, lay `patches/` over them,
+  add the `layout:herdr-t3` keys to `keys.json` without touching the rest,
+  `herdr-app check` the installed mods, then show `herdr-t3`.
+- Two Windows/PowerShell traps cost a round: `Set-Content -Encoding utf8` in
+  PS 5.1 writes a BOM the app cannot parse (`keys.json was not applied:
+  expected value at line 1 column 1`) — `[System.IO.File]::WriteAllText`
+  instead; and `$ErrorActionPreference = 'Stop'` turns `git clone`'s stderr
+  progress into a terminating error, so native calls run under `Continue`.
+  `herdr-app do layout.switch --name herdr-t3` also beats passing JSON
+  through PowerShell's native-argument quoting.
+- Verified both paths against the live home: `errors: []`, and the shot shows
+  the Vr3n brand, the rings and the chip left of `+`.
+
 ## 2026-11-02 (herdr-t3 installed, with our brand and the limits chip)
 
 - **Third-party layout `herdr-t3` (JinJieBeWater/herdr-t3) installed** into
